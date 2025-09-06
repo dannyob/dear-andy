@@ -21,10 +21,10 @@ class PDFSVGExtractor:
         for page_num in pages:
             page = doc[page_num]
             svg_text = page.get_svg_image()
-            
+
             if svg_text:
                 output_file = self.output_dir / f"{pdf_name}_page_{page_num + 1}.svg"
-                with open(output_file, 'w', encoding='utf-8') as f:
+                with open(output_file, "w", encoding="utf-8") as f:
                     f.write(svg_text)
                 extracted_files.append(output_file)
                 print(f"Extracted SVG: {output_file}")
@@ -46,7 +46,7 @@ class PDFSVGExtractor:
             return []
 
         print(f"Found {len(pdf_files)} PDF file(s) in '{self.pdf_dir.resolve()}'")
-        
+
         all_extracted = []
         for pdf_file in pdf_files:
             print(f"Processing {pdf_file.name}")
