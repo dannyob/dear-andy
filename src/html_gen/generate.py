@@ -210,6 +210,121 @@ class HTMLGenerator:
         return not (rect1['x2'] < rect2['x1'] or rect2['x2'] < rect1['x1'] or
                     rect1['y2'] < rect2['y1'] or rect2['y2'] < rect1['y1'])
 
+    def path_intersects_rect(self, path_d, rect):
+        """Check if any part of an SVG path actually intersects with a rectangle."""
+        if not path_d:
+            return False
+
+        # Skip full-page background/frame paths
+        if 'M0 0H595V842H0Z' in path_d or 'M 0 0 H 595 V 842 H 0 Z' in path_d:
+            return False
+
+        # Apply existing background filtering first
+        path_bbox = self.extract_path_bbox(path_d)
+        if not path_bbox:
+            return False
+
+        # Removed debug logging - keeping for future debugging if needed
+        is_iso_case = False
+
+        # Parse path data to extract coordinates and check for intersections
+        import re
+
+        # Find all coordinate pairs in the path
+        coords = re.findall(r'[-+]?\d*\.?\d+', path_d)
+        if len(coords) < 2:
+            return False
+
+        # Convert to floats and pair them up
+        numbers = [float(c) for c in coords]
+        points = [(numbers[i], numbers[i+1]) for i in range(0, len(numbers)-1, 2)]
+
+        if not points:
+            return False
+
+        # Count points inside the rectangle and total points
+        points_inside = 0
+        for x, y in points:
+            if (rect['x1'] <= x <= rect['x2'] and
+                rect['y1'] <= y <= rect['y2']):
+                points_inside += 1
+
+        # Require a significant portion of points to be inside (at least 20%)
+        # OR the path bounding box to have substantial overlap
+        if len(points) > 0:
+            percentage_inside = points_inside / len(points)
+
+            if is_iso_case and (percentage_inside > 0 or path_bbox):
+                print(f"ISO DEBUG: Path with bbox {path_bbox}")
+                print(f"  Points inside: {points_inside}/{len(points)} = {percentage_inside:.2%}")
+                print(f"  First few points: {points[:5]}")
+                print(f"  Path preview: {path_d[:100]}...")
+
+            if percentage_inside >= 0.5:  # At least 50% of points inside
+                if is_iso_case:
+                    print(f"  -> INCLUDED (percentage)")
+                return True
+
+        # Fallback: check if the path bounding box has good overlap with hyperlink box
+        if path_bbox:
+            # Calculate overlap area
+            overlap_x1 = max(path_bbox['x1'], rect['x1'])
+            overlap_y1 = max(path_bbox['y1'], rect['y1'])
+            overlap_x2 = min(path_bbox['x2'], rect['x2'])
+            overlap_y2 = min(path_bbox['y2'], rect['y2'])
+
+            if overlap_x1 < overlap_x2 and overlap_y1 < overlap_y2:
+                overlap_area = (overlap_x2 - overlap_x1) * (overlap_y2 - overlap_y1)
+                path_area = (path_bbox['x2'] - path_bbox['x1']) * (path_bbox['y2'] - path_bbox['y1'])
+
+                overlap_percentage = overlap_area / path_area if path_area > 0 else 0
+
+                if is_iso_case and overlap_percentage > 0:
+                    print(f"  Overlap: {overlap_area:.1f}/{path_area:.1f} = {overlap_percentage:.2%}")
+
+                # Require at least 50% of the path's bounding box to overlap
+                if path_area > 0 and overlap_percentage >= 0.5:
+                    if is_iso_case:
+                        print(f"  -> INCLUDED (overlap)")
+                    return True
+                elif is_iso_case and overlap_percentage > 0:
+                    print(f"  -> EXCLUDED (overlap too small)")
+
+        return False
+
+    def line_intersects_rect(self, x1, y1, x2, y2, rect):
+        """Check if a line segment intersects with a rectangle."""
+        # Check if either endpoint is inside the rectangle
+        if ((rect['x1'] <= x1 <= rect['x2'] and rect['y1'] <= y1 <= rect['y2']) or
+            (rect['x1'] <= x2 <= rect['x2'] and rect['y1'] <= y2 <= rect['y2'])):
+            return True
+
+        # Check intersection with each rectangle edge
+        # Left edge
+        if self.line_segments_intersect(x1, y1, x2, y2, rect['x1'], rect['y1'], rect['x1'], rect['y2']):
+            return True
+        # Right edge
+        if self.line_segments_intersect(x1, y1, x2, y2, rect['x2'], rect['y1'], rect['x2'], rect['y2']):
+            return True
+        # Top edge
+        if self.line_segments_intersect(x1, y1, x2, y2, rect['x1'], rect['y1'], rect['x2'], rect['y1']):
+            return True
+        # Bottom edge
+        if self.line_segments_intersect(x1, y1, x2, y2, rect['x1'], rect['y2'], rect['x2'], rect['y2']):
+            return True
+
+        return False
+
+    def line_segments_intersect(self, x1, y1, x2, y2, x3, y3, x4, y4):
+        """Check if two line segments intersect."""
+        # Calculate the direction of the lines
+        def ccw(Ax, Ay, Bx, By, Cx, Cy):
+            return (Cy - Ay) * (Bx - Ax) > (By - Ay) * (Cx - Ax)
+
+        # Check if the segments intersect
+        return (ccw(x1, y1, x3, y3, x4, y4) != ccw(x2, y2, x3, y3, x4, y4) and
+                ccw(x1, y1, x2, y2, x3, y3) != ccw(x1, y1, x2, y2, x4, y4))
+
     def apply_pdf_hyperlinks(self, svg_content, svg_path):
         """Apply PDF hyperlinks to SVG content."""
         hyperlinks = self.load_hyperlink_metadata(svg_path)
@@ -245,8 +360,7 @@ class HTMLGenerator:
                 if not path.get('d'):
                     continue
 
-                path_bbox = self.extract_path_bbox(path['d'])
-                if path_bbox and self.rect_intersects(link_bbox, path_bbox):
+                if self.path_intersects_rect(path['d'], link_bbox):
                     paths_to_modify.append(path)
 
             # Create hyperlink wrapper (even if no paths found)
