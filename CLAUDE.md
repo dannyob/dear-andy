@@ -23,12 +23,16 @@ A Python tool for converting handwritten letters from PDF files (created on tabl
 
 1. **PDF → SVG** (`src/pdf_tools/extract_svg.py`):
    - `PDFSVGExtractor` class uses PyMuPDF to extract SVG from each PDF page
+   - Automatically detects and extracts PDF hyperlink annotations
    - Outputs to `output/svg/` with naming pattern: `{pdf_name}_page_{n}.svg`
+   - Saves hyperlink metadata as `{pdf_name}_page_{n}_links.json` when links are found
 
 2. **SVG → HTML** (`src/html_gen/generate.py`):
    - `HTMLGenerator` class processes SVG files and renders HTML using Jinja2
    - Groups SVG files by original PDF name and sorts pages numerically
    - Handles SVG ID conflicts by adding unique page suffixes to IDs and `url()` references
+   - Automatically applies PDF hyperlinks by turning intersecting SVG paths blue and making them clickable
+   - Filters out background paths to ensure precise hyperlink targeting
    - Copies images from `images/` directory to `output/html/images/`
 
 ### Template System
@@ -41,6 +45,7 @@ A Python tool for converting handwritten letters from PDF files (created on tabl
 
 - PDFs must be placed in `../pdfs/` (out-of-tree)
 - SVG extraction: `output/svg/`
+- Hyperlink metadata: `output/svg/` (JSON files alongside SVG when links exist)
 - HTML generation: `output/html/`
 - Images copied from `images/` to `output/html/images/`
 

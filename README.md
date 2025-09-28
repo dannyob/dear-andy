@@ -1,6 +1,6 @@
 # Dear Andy
 
-Python tools for creating static HTML from PDF-extracted SVG content.
+Python tools for creating static HTML from PDF-extracted SVG content with automatic hyperlink preservation.
 
 ## Setup
 
