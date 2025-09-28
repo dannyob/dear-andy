@@ -170,13 +170,40 @@ class HTMLGenerator:
             'x2': max(x_coords), 'y2': max(y_coords)
         }
 
-        # Skip paths that span most of the page (likely backgrounds)
+        # Multi-criteria filtering for background/container elements
         width = bbox['x2'] - bbox['x1']
         height = bbox['y2'] - bbox['y1']
-        if width > 500 or height > 700:  # Either very wide OR very tall (page-spanning)
+
+        # 1. Skip very large paths (page-spanning backgrounds)
+        if width > 400 or height > 600:
+            return None
+
+        # 2. Skip geometric shapes that are likely backgrounds/containers
+        if self.is_likely_background_element(path_d, width, height):
             return None
 
         return bbox
+
+    def is_likely_background_element(self, path_d, width, height):
+        """Detect if a path is likely a background/container element."""
+        # Count different command types
+        h_v_count = len(re.findall(r'[HV]', path_d))  # Horizontal/Vertical lines
+        curve_count = len(re.findall(r'C', path_d))  # Curves
+        coords_count = len(re.findall(r'[-+]?\d*\.?\d+', path_d))
+
+        # Geometric shapes: mostly H/V commands, no curves, simple structure
+        is_geometric = h_v_count >= 2 and curve_count == 0
+
+        # Low coordinate density indicates simple geometric shapes
+        area = width * height
+        coord_density = coords_count / max(area, 1) if area > 0 else 0
+        is_simple = coord_density < 0.01  # Very few coordinates per pixel
+
+        # Wide elements are often containers/backgrounds
+        is_wide = width > 200
+
+        # Combine criteria: geometric OR (simple AND wide)
+        return is_geometric or (is_simple and is_wide)
 
     def rect_intersects(self, rect1, rect2):
         """Check if two rectangles intersect."""
