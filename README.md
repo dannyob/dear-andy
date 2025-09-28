@@ -13,9 +13,16 @@ make setup
 ## Usage
 
 1. Place PDF files in a `../pdfs/` directory (out-of-tree)
-2. Extract SVG from PDFs: `make extract`
-3. Generate HTML from SVG: `make html`
-4. Or run both: `make all`
+2. **Optional**: Add images to display at the bottom of HTML pages:
+   - Place images in the same `../pdfs/` directory
+   - Name them with the PDF prefix: `{pdf_name}-{description}.{ext}`
+   - Example: For `2025-09-28.pdf`, add `2025-09-28-photo1.jpg`, `2025-09-28-beach.png`
+   - Supported formats: `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`
+3. Extract SVG from PDFs: `make extract`
+4. Generate HTML from SVG: `make html`
+5. Or run both: `make all`
+
+Images will automatically appear at the bottom of the generated HTML with polaroid-style formatting.
 
 ## Testing
 
