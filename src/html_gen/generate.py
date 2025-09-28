@@ -1,4 +1,6 @@
 import shutil
+import json
+import re
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 from bs4 import BeautifulSoup
@@ -125,8 +127,154 @@ class HTMLGenerator:
 
             svg_str = re.sub(r"url\(#([^)]+)\)", replace_url_ref, svg_str)
 
+            # Apply PDF hyperlinks if metadata exists
+            svg_str = self.apply_pdf_hyperlinks(svg_str, svg_path)
+
             return svg_str
         return svg_content
+
+    def load_hyperlink_metadata(self, svg_path):
+        """Load hyperlink metadata for an SVG file if it exists."""
+        svg_path = Path(svg_path)
+        metadata_file = svg_path.parent / f"{svg_path.stem}_links.json"
+
+        if metadata_file.exists():
+            with open(metadata_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return []
+
+    def extract_path_bbox(self, path_d):
+        """Extract rough bounding box from SVG path data."""
+        if not path_d:
+            return None
+
+        # Skip full-page background/frame paths
+        if 'M0 0H595V842H0Z' in path_d or 'M 0 0 H 595 V 842 H 0 Z' in path_d:
+            return None
+
+        # Find all coordinate pairs in the path
+        coords = re.findall(r'[-+]?\d*\.?\d+', path_d)
+        if len(coords) < 2:
+            return None
+
+        # Convert to floats and pair them up
+        numbers = [float(c) for c in coords]
+        x_coords = numbers[::2]  # Every other starting with 0
+        y_coords = numbers[1::2]  # Every other starting with 1
+
+        if not x_coords or not y_coords:
+            return None
+
+        bbox = {
+            'x1': min(x_coords), 'y1': min(y_coords),
+            'x2': max(x_coords), 'y2': max(y_coords)
+        }
+
+        # Skip paths that span most of the page (likely backgrounds)
+        width = bbox['x2'] - bbox['x1']
+        height = bbox['y2'] - bbox['y1']
+        if width > 500 or height > 700:  # Either very wide OR very tall (page-spanning)
+            return None
+
+        return bbox
+
+    def rect_intersects(self, rect1, rect2):
+        """Check if two rectangles intersect."""
+        return not (rect1['x2'] < rect2['x1'] or rect2['x2'] < rect1['x1'] or
+                    rect1['y2'] < rect2['y1'] or rect2['y2'] < rect1['y1'])
+
+    def apply_pdf_hyperlinks(self, svg_content, svg_path):
+        """Apply PDF hyperlinks to SVG content."""
+        hyperlinks = self.load_hyperlink_metadata(svg_path)
+        if not hyperlinks:
+            return svg_content
+
+        soup = BeautifulSoup(svg_content, 'xml')
+        svg_element = soup.find('svg')
+
+        for link_data in hyperlinks:
+            uri = link_data['uri']
+            bbox = link_data['bbox']
+
+            # Convert PDF bbox to SVG coordinates accounting for transform matrix(1,0,0,-1,0,842)
+            # PDF: y=0 is bottom, SVG: y=0 is top, transform flips and translates by 842
+            pdf_x1, pdf_y1 = bbox['x'], bbox['y']
+            pdf_x2, pdf_y2 = bbox['x'] + bbox['width'], bbox['y'] + bbox['height']
+
+            # Transform to SVG coordinates
+            svg_x1, svg_x2 = pdf_x1, pdf_x2
+            svg_y1, svg_y2 = 842 - pdf_y2, 842 - pdf_y1  # Flip Y coordinates
+
+            link_bbox = {
+                'x1': svg_x1, 'y1': svg_y1,
+                'x2': svg_x2, 'y2': svg_y2
+            }
+
+            # Find all paths that intersect this bounding box
+            paths_to_modify = []
+            all_paths = soup.find_all('path')
+
+            for path in all_paths:
+                if not path.get('d'):
+                    continue
+
+                path_bbox = self.extract_path_bbox(path['d'])
+                if path_bbox and self.rect_intersects(link_bbox, path_bbox):
+                    paths_to_modify.append(path)
+
+            # Create hyperlink wrapper (even if no paths found)
+            link_elem = soup.new_tag('a')
+            link_elem['xlink:href'] = uri
+            link_elem['target'] = '_blank'
+
+            if paths_to_modify:
+                # Create group for blue styling when paths exist
+                group_elem = soup.new_tag('g')
+                group_elem['stroke'] = 'blue'
+                group_elem['fill'] = 'none'
+                group_elem['stroke-width'] = '1'
+                group_elem['stroke-linecap'] = 'round'
+                group_elem['stroke-linejoin'] = 'round'
+
+                # Add clickable rect (using original PDF coordinates - this positioning worked!)
+                click_rect = soup.new_tag('rect')
+                click_rect['x'] = f"{bbox['x']:.1f}"
+                click_rect['y'] = f"{bbox['y']:.1f}"
+                click_rect['width'] = f"{bbox['width']:.1f}"
+                click_rect['height'] = f"{bbox['height']:.1f}"
+                click_rect['fill'] = 'none'
+                click_rect['stroke'] = 'none'
+                click_rect['pointer-events'] = 'all'
+
+                group_elem.append(click_rect)
+
+                # Move intersecting paths into the blue group and change their stroke
+                for path in paths_to_modify:
+                    # Remove from original location
+                    path.extract()
+                    # Change stroke to blue
+                    path['stroke'] = 'blue'
+                    # Add to blue group
+                    group_elem.append(path)
+
+                link_elem.append(group_elem)
+            else:
+                # No paths found, just add clickable area with light background for visibility
+                click_rect = soup.new_tag('rect')
+                click_rect['x'] = f"{bbox['x']:.1f}"
+                click_rect['y'] = f"{bbox['y']:.1f}"
+                click_rect['width'] = f"{bbox['width']:.1f}"
+                click_rect['height'] = f"{bbox['height']:.1f}"
+                click_rect['fill'] = 'rgba(0,0,255,0.1)'  # Light blue background
+                click_rect['stroke'] = 'blue'
+                click_rect['stroke-width'] = '1'
+                click_rect['pointer-events'] = 'all'
+
+                link_elem.append(click_rect)
+
+            svg_element.append(link_elem)
+
+        return str(soup)
 
     def copy_images_to_html_dir(self, pdf_name):
         """Copy images with matching PDF prefix from pdfs directory to html output directory."""

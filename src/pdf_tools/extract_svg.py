@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 from pathlib import Path
 import fitz  # PyMuPDF
 
@@ -11,7 +12,7 @@ class PDFSVGExtractor:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def extract_svg_from_pdf(self, pdf_path, page_range=None):
-        """Extract SVG content from PDF pages."""
+        """Extract SVG content from PDF pages with hyperlink metadata."""
         doc = fitz.open(pdf_path)
         pdf_name = Path(pdf_path).stem
         extracted_files = []
@@ -23,11 +24,35 @@ class PDFSVGExtractor:
             svg_text = page.get_svg_image()
 
             if svg_text:
+                # Extract hyperlinks from this page
+                links = page.get_links()
+                hyperlinks = []
+                for link in links:
+                    if link['kind'] == 2:  # URI link
+                        hyperlinks.append({
+                            'uri': link['uri'],
+                            'bbox': {
+                                'x': link['from'].x0,
+                                'y': link['from'].y0,
+                                'width': link['from'].width,
+                                'height': link['from'].height
+                            }
+                        })
+
+                # Save SVG file
                 output_file = self.output_dir / f"{pdf_name}_page_{page_num + 1}.svg"
                 with open(output_file, "w", encoding="utf-8") as f:
                     f.write(svg_text)
                 extracted_files.append(output_file)
-                print(f"Extracted SVG: {output_file}")
+
+                # Save hyperlink metadata if any links found
+                if hyperlinks:
+                    metadata_file = self.output_dir / f"{pdf_name}_page_{page_num + 1}_links.json"
+                    with open(metadata_file, "w", encoding="utf-8") as f:
+                        json.dump(hyperlinks, f, indent=2)
+                    print(f"Extracted SVG with {len(hyperlinks)} hyperlinks: {output_file}")
+                else:
+                    print(f"Extracted SVG: {output_file}")
 
         doc.close()
         return extracted_files
