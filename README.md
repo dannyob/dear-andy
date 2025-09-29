@@ -2,6 +2,12 @@
 
 Python tools for creating static HTML from PDF-extracted SVG content with automatic hyperlink preservation.
 
+Written so I could write handwritten letters to [Andy R.](https://misterandyriley.com/) 
+using a [Daylight DC-1](https://daylightcomputer.com/) and [Xodo](https://xodo.com/) and output
+them as dinky little web pages, because I can't be bothered to buy stamps. 
+
+You might find it useful too!
+
 ## Setup
 
 Install dependencies using uv:
@@ -12,9 +18,9 @@ make setup
 
 ## Usage
 
-1. Place PDF files in a `../pdfs/` directory (out-of-tree)
+1. Place PDF files in a `pdfs/` directory.
 2. **Optional**: Add images to display at the bottom of HTML pages:
-   - Place images in the same `../pdfs/` directory
+   - Place images in the same `pdfs/` directory
    - Name them with the PDF prefix: `{pdf_name}-{description}.{ext}`
    - Example: For `2025-09-28.pdf`, add `2025-09-28-photo1.jpg`, `2025-09-28-beach.png`
    - Supported formats: `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`
