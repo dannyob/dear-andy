@@ -1,0 +1,185 @@
+<html>
+    <head>
+        <title>{{ title }}</title>
+          <style>
+
+body {
+  background: beige;
+}
+
+.container {
+
+  background: white;
+  width: 80ch;
+  margin-top: 2rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 1.5rem;
+  padding-top: 2rem;
+  box-shadow: 5px 5px 10px #aaa;
+}
+
+* {
+box-sizing: border-box;
+border: 0;
+margin: 0;
+}
+
+    .polaroid {
+      width: 595px;
+      height: auto;
+      display: inline-block;
+      background: white;
+      padding: 10px 10px 25px 10px; /* thicker bottom for polaroid style */
+      border: 1px solid #ccc;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      transform: rotate(-2deg);
+      filter: sepia(0.2) contrast(0.9) brightness(1.05) saturate(0.85);
+      transition: transform 0.3s ease;
+    }
+
+    .polaroid:hover {
+      transform: rotate(0deg) scale(1.03);
+    }
+
+    .polaroid img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .header {
+      text-align: center;
+      font-family: 'Georgia', serif;
+      margin-top: 2em;
+    }
+
+    .header img {
+      width: 38px;
+      filter: grayscale(100%) contrast(120%);
+      margin-bottom: 0.65em;
+      position: relative;
+      left: -2px;
+    }
+
+    .header .address {
+      font-size: 0.9em;
+      color: #444;
+    }
+
+    .page-container {
+      padding: 0;
+      margin: 0;
+    }
+
+    .page-container:not(:last-child) {
+      page-break-after: always;
+    }
+
+    @media print {
+      body {
+        background: white;
+        margin: 0;
+        padding: 0;
+      }
+
+      .container {
+        box-shadow: none;
+        margin: 0;
+        padding: 0;
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        page-break-after: always;
+        box-sizing: border-box;
+      }
+
+      .container:last-child {
+        page-break-after: avoid;
+      }
+
+      /* Scale content to fit the page */
+      .page-content-wrapper {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        transform-origin: center;
+      }
+
+      /* Make header more compact for print */
+      .header {
+        margin: 0.5rem 0;
+        flex-shrink: 0;
+      }
+
+      .header img {
+        width: 24px;
+        margin-bottom: 0.25em;
+      }
+
+      .header .address {
+        font-size: 0.7em;
+        line-height: 1.1;
+      }
+
+      /* Make page container flexible */
+      .page-container {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        max-height: 85vh; /* Leave room for header on first page */
+      }
+
+      .page-container svg {
+        max-width: 90vw;
+        max-height: 100%;
+        width: auto;
+        height: auto;
+      }
+    }
+
+    .photo-gallery {
+      margin-top: 3rem;
+      text-align: center;
+    }
+  </style>
+    </head>
+    <body>
+{% for svg_content in svg_contents %}
+        <div>
+        <div class="container">
+{% if loop.first %}
+            <div class="header">
+                    <div class="address">
+                        Your Address, Your Town, Your Country, Earth, Solar System, The Milky Way.
+                    </div>
+</div>
+{% endif %}
+<div class="page-container">
+{{ svg_content|safe }}
+</div>
+{% if not loop.last %}
+        </div>
+        </div>
+{% endif %}
+{% endfor %}
+        </div>
+        </div>
+
+        <div class="photo-gallery">
+{% for photo in photo_filenames %}
+ <div class="polaroid">
+    <img src="{{ photo }}">
+ </div>
+{% endfor %}
+        </div>
+    </body>
+</html>
