@@ -1,9 +1,10 @@
-import shutil
 import json
 import re
+import shutil
 from pathlib import Path
-from jinja2 import Environment, FileSystemLoader
+
 from bs4 import BeautifulSoup
+from jinja2 import Environment, FileSystemLoader
 
 
 class HTMLGenerator:
@@ -139,7 +140,7 @@ class HTMLGenerator:
         metadata_file = svg_path.parent / f"{svg_path.stem}_links.json"
 
         if metadata_file.exists():
-            with open(metadata_file, 'r', encoding='utf-8') as f:
+            with open(metadata_file, "r", encoding="utf-8") as f:
                 return json.load(f)
         return []
 
@@ -149,11 +150,11 @@ class HTMLGenerator:
             return None
 
         # Skip full-page background/frame paths
-        if 'M0 0H595V842H0Z' in path_d or 'M 0 0 H 595 V 842 H 0 Z' in path_d:
+        if "M0 0H595V842H0Z" in path_d or "M 0 0 H 595 V 842 H 0 Z" in path_d:
             return None
 
         # Find all coordinate pairs in the path
-        coords = re.findall(r'[-+]?\d*\.?\d+', path_d)
+        coords = re.findall(r"[-+]?\d*\.?\d+", path_d)
         if len(coords) < 2:
             return None
 
@@ -166,13 +167,15 @@ class HTMLGenerator:
             return None
 
         bbox = {
-            'x1': min(x_coords), 'y1': min(y_coords),
-            'x2': max(x_coords), 'y2': max(y_coords)
+            "x1": min(x_coords),
+            "y1": min(y_coords),
+            "x2": max(x_coords),
+            "y2": max(y_coords),
         }
 
         # Multi-criteria filtering for background/container elements
-        width = bbox['x2'] - bbox['x1']
-        height = bbox['y2'] - bbox['y1']
+        width = bbox["x2"] - bbox["x1"]
+        height = bbox["y2"] - bbox["y1"]
 
         # 1. Skip very large paths (page-spanning backgrounds)
         if width > 400 or height > 600:
@@ -187,9 +190,9 @@ class HTMLGenerator:
     def is_likely_background_element(self, path_d, width, height):
         """Detect if a path is likely a background/container element."""
         # Count different command types
-        h_v_count = len(re.findall(r'[HV]', path_d))  # Horizontal/Vertical lines
-        curve_count = len(re.findall(r'C', path_d))  # Curves
-        coords_count = len(re.findall(r'[-+]?\d*\.?\d+', path_d))
+        h_v_count = len(re.findall(r"[HV]", path_d))  # Horizontal/Vertical lines
+        curve_count = len(re.findall(r"C", path_d))  # Curves
+        coords_count = len(re.findall(r"[-+]?\d*\.?\d+", path_d))
 
         # Geometric shapes: mostly H/V commands, no curves, simple structure
         is_geometric = h_v_count >= 2 and curve_count == 0
@@ -207,8 +210,12 @@ class HTMLGenerator:
 
     def rect_intersects(self, rect1, rect2):
         """Check if two rectangles intersect."""
-        return not (rect1['x2'] < rect2['x1'] or rect2['x2'] < rect1['x1'] or
-                    rect1['y2'] < rect2['y1'] or rect2['y2'] < rect1['y1'])
+        return not (
+            rect1["x2"] < rect2["x1"]
+            or rect2["x2"] < rect1["x1"]
+            or rect1["y2"] < rect2["y1"]
+            or rect2["y2"] < rect1["y1"]
+        )
 
     def path_intersects_rect(self, path_d, rect):
         """Check if any part of an SVG path actually intersects with a rectangle."""
@@ -216,7 +223,7 @@ class HTMLGenerator:
             return False
 
         # Skip full-page background/frame paths
-        if 'M0 0H595V842H0Z' in path_d or 'M 0 0 H 595 V 842 H 0 Z' in path_d:
+        if "M0 0H595V842H0Z" in path_d or "M 0 0 H 595 V 842 H 0 Z" in path_d:
             return False
 
         # Apply existing background filtering first
@@ -231,13 +238,13 @@ class HTMLGenerator:
         import re
 
         # Find all coordinate pairs in the path
-        coords = re.findall(r'[-+]?\d*\.?\d+', path_d)
+        coords = re.findall(r"[-+]?\d*\.?\d+", path_d)
         if len(coords) < 2:
             return False
 
         # Convert to floats and pair them up
         numbers = [float(c) for c in coords]
-        points = [(numbers[i], numbers[i+1]) for i in range(0, len(numbers)-1, 2)]
+        points = [(numbers[i], numbers[i + 1]) for i in range(0, len(numbers) - 1, 2)]
 
         if not points:
             return False
@@ -245,8 +252,7 @@ class HTMLGenerator:
         # Count points inside the rectangle and total points
         points_inside = 0
         for x, y in points:
-            if (rect['x1'] <= x <= rect['x2'] and
-                rect['y1'] <= y <= rect['y2']):
+            if rect["x1"] <= x <= rect["x2"] and rect["y1"] <= y <= rect["y2"]:
                 points_inside += 1
 
         # Require a significant portion of points to be inside (at least 20%)
@@ -256,74 +262,93 @@ class HTMLGenerator:
 
             if is_iso_case and (percentage_inside > 0 or path_bbox):
                 print(f"ISO DEBUG: Path with bbox {path_bbox}")
-                print(f"  Points inside: {points_inside}/{len(points)} = {percentage_inside:.2%}")
+                print(
+                    f"  Points inside: {points_inside}/{len(points)} = "
+                    f"{percentage_inside:.2%}"
+                )
                 print(f"  First few points: {points[:5]}")
                 print(f"  Path preview: {path_d[:100]}...")
 
             if percentage_inside >= 0.5:  # At least 50% of points inside
                 if is_iso_case:
-                    print(f"  -> INCLUDED (percentage)")
+                    print("  -> INCLUDED (percentage)")
                 return True
 
         # Fallback: check if the path bounding box has good overlap with hyperlink box
         if path_bbox:
             # Calculate overlap area
-            overlap_x1 = max(path_bbox['x1'], rect['x1'])
-            overlap_y1 = max(path_bbox['y1'], rect['y1'])
-            overlap_x2 = min(path_bbox['x2'], rect['x2'])
-            overlap_y2 = min(path_bbox['y2'], rect['y2'])
+            overlap_x1 = max(path_bbox["x1"], rect["x1"])
+            overlap_y1 = max(path_bbox["y1"], rect["y1"])
+            overlap_x2 = min(path_bbox["x2"], rect["x2"])
+            overlap_y2 = min(path_bbox["y2"], rect["y2"])
 
             if overlap_x1 < overlap_x2 and overlap_y1 < overlap_y2:
                 overlap_area = (overlap_x2 - overlap_x1) * (overlap_y2 - overlap_y1)
-                path_area = (path_bbox['x2'] - path_bbox['x1']) * (path_bbox['y2'] - path_bbox['y1'])
+                path_area = (path_bbox["x2"] - path_bbox["x1"]) * (
+                    path_bbox["y2"] - path_bbox["y1"]
+                )
 
                 overlap_percentage = overlap_area / path_area if path_area > 0 else 0
 
                 if is_iso_case and overlap_percentage > 0:
-                    print(f"  Overlap: {overlap_area:.1f}/{path_area:.1f} = {overlap_percentage:.2%}")
+                    print(
+                        f"  Overlap: {overlap_area:.1f}/{path_area:.1f} = "
+                        f"{overlap_percentage:.2%}"
+                    )
 
                 # Require at least 50% of the path's bounding box to overlap
                 if path_area > 0 and overlap_percentage >= 0.5:
                     if is_iso_case:
-                        print(f"  -> INCLUDED (overlap)")
+                        print("  -> INCLUDED (overlap)")
                     return True
                 elif is_iso_case and overlap_percentage > 0:
-                    print(f"  -> EXCLUDED (overlap too small)")
+                    print("  -> EXCLUDED (overlap too small)")
 
         return False
 
     def line_intersects_rect(self, x1, y1, x2, y2, rect):
         """Check if a line segment intersects with a rectangle."""
         # Check if either endpoint is inside the rectangle
-        if ((rect['x1'] <= x1 <= rect['x2'] and rect['y1'] <= y1 <= rect['y2']) or
-            (rect['x1'] <= x2 <= rect['x2'] and rect['y1'] <= y2 <= rect['y2'])):
+        if (rect["x1"] <= x1 <= rect["x2"] and rect["y1"] <= y1 <= rect["y2"]) or (
+            rect["x1"] <= x2 <= rect["x2"] and rect["y1"] <= y2 <= rect["y2"]
+        ):
             return True
 
         # Check intersection with each rectangle edge
         # Left edge
-        if self.line_segments_intersect(x1, y1, x2, y2, rect['x1'], rect['y1'], rect['x1'], rect['y2']):
+        if self.line_segments_intersect(
+            x1, y1, x2, y2, rect["x1"], rect["y1"], rect["x1"], rect["y2"]
+        ):
             return True
         # Right edge
-        if self.line_segments_intersect(x1, y1, x2, y2, rect['x2'], rect['y1'], rect['x2'], rect['y2']):
+        if self.line_segments_intersect(
+            x1, y1, x2, y2, rect["x2"], rect["y1"], rect["x2"], rect["y2"]
+        ):
             return True
         # Top edge
-        if self.line_segments_intersect(x1, y1, x2, y2, rect['x1'], rect['y1'], rect['x2'], rect['y1']):
+        if self.line_segments_intersect(
+            x1, y1, x2, y2, rect["x1"], rect["y1"], rect["x2"], rect["y1"]
+        ):
             return True
         # Bottom edge
-        if self.line_segments_intersect(x1, y1, x2, y2, rect['x1'], rect['y2'], rect['x2'], rect['y2']):
+        if self.line_segments_intersect(
+            x1, y1, x2, y2, rect["x1"], rect["y2"], rect["x2"], rect["y2"]
+        ):
             return True
 
         return False
 
     def line_segments_intersect(self, x1, y1, x2, y2, x3, y3, x4, y4):
         """Check if two line segments intersect."""
+
         # Calculate the direction of the lines
         def ccw(Ax, Ay, Bx, By, Cx, Cy):
             return (Cy - Ay) * (Bx - Ax) > (By - Ay) * (Cx - Ax)
 
         # Check if the segments intersect
-        return (ccw(x1, y1, x3, y3, x4, y4) != ccw(x2, y2, x3, y3, x4, y4) and
-                ccw(x1, y1, x2, y2, x3, y3) != ccw(x1, y1, x2, y2, x4, y4))
+        return ccw(x1, y1, x3, y3, x4, y4) != ccw(x2, y2, x3, y3, x4, y4) and ccw(
+            x1, y1, x2, y2, x3, y3
+        ) != ccw(x1, y1, x2, y2, x4, y4)
 
     def apply_pdf_hyperlinks(self, svg_content, svg_path):
         """Apply PDF hyperlinks to SVG content."""
@@ -331,61 +356,60 @@ class HTMLGenerator:
         if not hyperlinks:
             return svg_content
 
-        soup = BeautifulSoup(svg_content, 'xml')
-        svg_element = soup.find('svg')
+        soup = BeautifulSoup(svg_content, "xml")
+        svg_element = soup.find("svg")
 
         for link_data in hyperlinks:
-            uri = link_data['uri']
-            bbox = link_data['bbox']
+            uri = link_data["uri"]
+            bbox = link_data["bbox"]
 
-            # Convert PDF bbox to SVG coordinates accounting for transform matrix(1,0,0,-1,0,842)
+            # Convert PDF bbox to SVG coordinates accounting for transform
+            # matrix(1,0,0,-1,0,842)
             # PDF: y=0 is bottom, SVG: y=0 is top, transform flips and translates by 842
-            pdf_x1, pdf_y1 = bbox['x'], bbox['y']
-            pdf_x2, pdf_y2 = bbox['x'] + bbox['width'], bbox['y'] + bbox['height']
+            pdf_x1, pdf_y1 = bbox["x"], bbox["y"]
+            pdf_x2, pdf_y2 = bbox["x"] + bbox["width"], bbox["y"] + bbox["height"]
 
             # Transform to SVG coordinates
             svg_x1, svg_x2 = pdf_x1, pdf_x2
             svg_y1, svg_y2 = 842 - pdf_y2, 842 - pdf_y1  # Flip Y coordinates
 
-            link_bbox = {
-                'x1': svg_x1, 'y1': svg_y1,
-                'x2': svg_x2, 'y2': svg_y2
-            }
+            link_bbox = {"x1": svg_x1, "y1": svg_y1, "x2": svg_x2, "y2": svg_y2}
 
             # Find all paths that intersect this bounding box
             paths_to_modify = []
-            all_paths = soup.find_all('path')
+            all_paths = soup.find_all("path")
 
             for path in all_paths:
-                if not path.get('d'):
+                if not path.get("d"):
                     continue
 
-                if self.path_intersects_rect(path['d'], link_bbox):
+                if self.path_intersects_rect(path["d"], link_bbox):
                     paths_to_modify.append(path)
 
             # Create hyperlink wrapper (even if no paths found)
-            link_elem = soup.new_tag('a')
-            link_elem['xlink:href'] = uri
-            link_elem['target'] = '_blank'
+            link_elem = soup.new_tag("a")
+            link_elem["xlink:href"] = uri
+            link_elem["target"] = "_blank"
 
             if paths_to_modify:
                 # Create group for blue styling when paths exist
-                group_elem = soup.new_tag('g')
-                group_elem['stroke'] = 'blue'
-                group_elem['fill'] = 'none'
-                group_elem['stroke-width'] = '1'
-                group_elem['stroke-linecap'] = 'round'
-                group_elem['stroke-linejoin'] = 'round'
+                group_elem = soup.new_tag("g")
+                group_elem["stroke"] = "blue"
+                group_elem["fill"] = "none"
+                group_elem["stroke-width"] = "1"
+                group_elem["stroke-linecap"] = "round"
+                group_elem["stroke-linejoin"] = "round"
 
-                # Add clickable rect (using original PDF coordinates - this positioning worked!)
-                click_rect = soup.new_tag('rect')
-                click_rect['x'] = f"{bbox['x']:.1f}"
-                click_rect['y'] = f"{bbox['y']:.1f}"
-                click_rect['width'] = f"{bbox['width']:.1f}"
-                click_rect['height'] = f"{bbox['height']:.1f}"
-                click_rect['fill'] = 'none'
-                click_rect['stroke'] = 'none'
-                click_rect['pointer-events'] = 'all'
+                # Add clickable rect (using original PDF coordinates - this
+                # positioning worked!)
+                click_rect = soup.new_tag("rect")
+                click_rect["x"] = f"{bbox['x']:.1f}"
+                click_rect["y"] = f"{bbox['y']:.1f}"
+                click_rect["width"] = f"{bbox['width']:.1f}"
+                click_rect["height"] = f"{bbox['height']:.1f}"
+                click_rect["fill"] = "none"
+                click_rect["stroke"] = "none"
+                click_rect["pointer-events"] = "all"
 
                 group_elem.append(click_rect)
 
@@ -394,22 +418,23 @@ class HTMLGenerator:
                     # Remove from original location
                     path.extract()
                     # Change stroke to blue
-                    path['stroke'] = 'blue'
+                    path["stroke"] = "blue"
                     # Add to blue group
                     group_elem.append(path)
 
                 link_elem.append(group_elem)
             else:
-                # No paths found, just add clickable area with light background for visibility
-                click_rect = soup.new_tag('rect')
-                click_rect['x'] = f"{bbox['x']:.1f}"
-                click_rect['y'] = f"{bbox['y']:.1f}"
-                click_rect['width'] = f"{bbox['width']:.1f}"
-                click_rect['height'] = f"{bbox['height']:.1f}"
-                click_rect['fill'] = 'rgba(0,0,255,0.1)'  # Light blue background
-                click_rect['stroke'] = 'blue'
-                click_rect['stroke-width'] = '1'
-                click_rect['pointer-events'] = 'all'
+                # No paths found, just add clickable area with light background
+                # for visibility
+                click_rect = soup.new_tag("rect")
+                click_rect["x"] = f"{bbox['x']:.1f}"
+                click_rect["y"] = f"{bbox['y']:.1f}"
+                click_rect["width"] = f"{bbox['width']:.1f}"
+                click_rect["height"] = f"{bbox['height']:.1f}"
+                click_rect["fill"] = "rgba(0,0,255,0.1)"  # Light blue background
+                click_rect["stroke"] = "blue"
+                click_rect["stroke-width"] = "1"
+                click_rect["pointer-events"] = "all"
 
                 link_elem.append(click_rect)
 
@@ -418,7 +443,8 @@ class HTMLGenerator:
         return str(soup)
 
     def copy_images_to_html_dir(self, pdf_name):
-        """Copy images with matching PDF prefix from pdfs directory to html output directory."""
+        """Copy images with matching PDF prefix from pdfs directory to html
+        output directory."""
         if not self.pdfs_dir.exists():
             return []
 

@@ -1,7 +1,6 @@
-import os
-import sys
 import json
 from pathlib import Path
+
 import fitz  # PyMuPDF
 
 
@@ -28,16 +27,18 @@ class PDFSVGExtractor:
                 links = page.get_links()
                 hyperlinks = []
                 for link in links:
-                    if link['kind'] == 2:  # URI link
-                        hyperlinks.append({
-                            'uri': link['uri'],
-                            'bbox': {
-                                'x': link['from'].x0,
-                                'y': link['from'].y0,
-                                'width': link['from'].width,
-                                'height': link['from'].height
+                    if link["kind"] == 2:  # URI link
+                        hyperlinks.append(
+                            {
+                                "uri": link["uri"],
+                                "bbox": {
+                                    "x": link["from"].x0,
+                                    "y": link["from"].y0,
+                                    "width": link["from"].width,
+                                    "height": link["from"].height,
+                                },
                             }
-                        })
+                        )
 
                 # Save SVG file
                 output_file = self.output_dir / f"{pdf_name}_page_{page_num + 1}.svg"
@@ -47,10 +48,15 @@ class PDFSVGExtractor:
 
                 # Save hyperlink metadata if any links found
                 if hyperlinks:
-                    metadata_file = self.output_dir / f"{pdf_name}_page_{page_num + 1}_links.json"
+                    metadata_file = (
+                        self.output_dir / f"{pdf_name}_page_{page_num + 1}_links.json"
+                    )
                     with open(metadata_file, "w", encoding="utf-8") as f:
                         json.dump(hyperlinks, f, indent=2)
-                    print(f"Extracted SVG with {len(hyperlinks)} hyperlinks: {output_file}")
+                    print(
+                        f"Extracted SVG with {len(hyperlinks)} hyperlinks: "
+                        f"{output_file}"
+                    )
                 else:
                     print(f"Extracted SVG: {output_file}")
 
@@ -61,13 +67,13 @@ class PDFSVGExtractor:
         """Extract SVG from all PDFs in the PDF directory."""
         if not self.pdf_dir.exists():
             print(f"Error: PDF directory '{self.pdf_dir.resolve()}' does not exist.")
-            print(f"Please create the directory and add PDF files to it.")
+            print("Please create the directory and add PDF files to it.")
             return []
 
         pdf_files = list(self.pdf_dir.glob("*.pdf"))
         if not pdf_files:
             print(f"Error: No PDF files found in '{self.pdf_dir.resolve()}'.")
-            print(f"Please add PDF files to the directory.")
+            print("Please add PDF files to the directory.")
             return []
 
         print(f"Found {len(pdf_files)} PDF file(s) in '{self.pdf_dir.resolve()}'")
