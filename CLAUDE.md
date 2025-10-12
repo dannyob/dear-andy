@@ -10,7 +10,9 @@ A Python tool for converting handwritten letters from PDF files (created on tabl
 
 - **Setup**: `make setup` - Initialize uv project and install dependencies
 - **Extract SVG**: `make extract` - Extract SVG from PDFs in `../pdfs/` directory
-- **Generate HTML**: `make html` - Convert SVG files to HTML 
+- **Optimize SVG**: `make optimize` - Run svgo on SVG files (if svgo is installed)
+- **Generate HTML**: `make html` - Full pipeline: extract → optimize → convert to HTML
+- **Publish**: `make publish` - Copy generated HTML files to PUBLISH_DIR (configurable in Makefile)
 - **Full pipeline**: `make all` - Run tests and generate HTML
 - **Test**: `make test` - Run pytest with verbose output
 - **Lint**: `make lint` - Run ruff linting and format checking
@@ -19,15 +21,22 @@ A Python tool for converting handwritten letters from PDF files (created on tabl
 
 ## Architecture
 
-### Two-stage processing pipeline:
+### Three-stage processing pipeline:
 
 1. **PDF → SVG** (`src/pdf_tools/extract_svg.py`):
    - `PDFSVGExtractor` class uses PyMuPDF to extract SVG from each PDF page
    - Automatically detects and extracts PDF hyperlink annotations
+   - Built-in coordinate precision reduction (2 decimal places) via `optimize_svg_precision()`
    - Outputs to `output/svg/` with naming pattern: `{pdf_name}_page_{n}.svg`
    - Saves hyperlink metadata as `{pdf_name}_page_{n}_links.json` when links are found
 
-2. **SVG → HTML** (`src/html_gen/generate.py`):
+2. **SVG Optimization** (Makefile `optimize` target):
+   - Automatically runs `svgo` on extracted SVG files if available
+   - Provides additional compression beyond coordinate rounding
+   - Gracefully skips if svgo is not installed
+   - Install svgo with: `npm install -g svgo`
+
+3. **SVG → HTML** (`src/html_gen/generate.py`):
    - `HTMLGenerator` class processes SVG files and renders HTML using Jinja2
    - Groups SVG files by original PDF name and sorts pages numerically
    - Handles SVG ID conflicts by adding unique page suffixes to IDs and `url()` references
@@ -48,6 +57,7 @@ A Python tool for converting handwritten letters from PDF files (created on tabl
 - Hyperlink metadata: `output/svg/` (JSON files alongside SVG when links exist)
 - HTML generation: `output/html/`
 - Images copied from `images/` to `output/html/images/`
+- Published files: `publish/` directory (can be a symlink to your website)
 
 ## Development Notes
 
