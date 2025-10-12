@@ -71,6 +71,7 @@ output/
 pdfs/
 images/
 templates/base.html
+publish/
 *.log
 .uv/
 uv.lock

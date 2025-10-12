@@ -1,9 +1,10 @@
-.PHONY: all clean test lint setup install dev-install html svg extract optimize help
+.PHONY: all clean test lint setup install dev-install html svg extract optimize publish help
 
 UV := uv
 SRC_DIR := src
 TEST_DIR := tests
 OUTPUT_DIR := output
+PUBLISH_DIR := publish
 
 all: test html
 
@@ -17,6 +18,7 @@ help:
 	@echo "  extract     - Extract SVG from PDFs"
 	@echo "  optimize    - Optimize SVG files with svgo (if available)"
 	@echo "  html        - Generate HTML from SVG"
+	@echo "  publish     - Copy generated HTML files to PUBLISH_DIR"
 	@echo "  clean       - Remove generated files and cache"
 	@echo "  all         - Run tests and generate HTML"
 
@@ -56,8 +58,34 @@ optimize: setup
 html: setup extract optimize
 	$(UV) run python -m src.html_gen.generate
 
+publish:
+	@echo "Publishing HTML files to $(PUBLISH_DIR)..."
+	@# Check if PUBLISH_DIR exists (following symlinks with -L)
+	@if [ ! -e "$(PUBLISH_DIR)" ]; then \
+		echo "Error: PUBLISH_DIR '$(PUBLISH_DIR)' does not exist"; \
+		echo "Create it with: mkdir $(PUBLISH_DIR)"; \
+		echo "Or symlink it to your website: ln -s /path/to/website $(PUBLISH_DIR)"; \
+		exit 1; \
+	fi
+	@if [ ! -d "$(OUTPUT_DIR)/html" ]; then \
+		echo "Error: No HTML files to publish. Run 'make html' first."; \
+		exit 1; \
+	fi
+	@# Copy generated HTML files (YYYY-MM-DD.html pattern and index.html)
+	cp -v $(OUTPUT_DIR)/html/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].html $(PUBLISH_DIR)/ 2>/dev/null || true
+	cp -v $(OUTPUT_DIR)/html/index.html $(PUBLISH_DIR)/ 2>/dev/null || true
+	@# Copy images directory if it exists
+	@if [ -d "$(OUTPUT_DIR)/html/images" ]; then \
+		echo "Copying images directory..."; \
+		cp -r $(OUTPUT_DIR)/html/images $(PUBLISH_DIR)/; \
+	fi
+	@echo "Published to $(PUBLISH_DIR)"
+
 clean:
-	rm -rf $(OUTPUT_DIR)/*
+	@echo "Cleaning generated files (preserving $(PUBLISH_DIR))..."
+	@# Clean SVG and HTML directories, but not publish
+	rm -rf $(OUTPUT_DIR)/svg $(OUTPUT_DIR)/html
+	@# Clean Python cache files
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 	find . -type f -name "*.pyo" -delete
