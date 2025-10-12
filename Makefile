@@ -1,4 +1,4 @@
-.PHONY: all clean test lint setup install dev-install html svg extract help
+.PHONY: all clean test lint setup install dev-install html svg extract optimize help
 
 UV := uv
 SRC_DIR := src
@@ -15,6 +15,7 @@ help:
 	@echo "  test        - Run all tests"
 	@echo "  lint        - Run code linting"
 	@echo "  extract     - Extract SVG from PDFs"
+	@echo "  optimize    - Optimize SVG files with svgo (if available)"
 	@echo "  html        - Generate HTML from SVG"
 	@echo "  clean       - Remove generated files and cache"
 	@echo "  all         - Run tests and generate HTML"
@@ -41,7 +42,18 @@ format: setup
 extract: setup
 	$(UV) run python -m src.pdf_tools.extract_svg
 
-html: setup extract
+optimize: setup
+	@echo "Checking for svgo..."
+	@if command -v svgo >/dev/null 2>&1; then \
+		echo "Found svgo, optimizing SVG files..."; \
+		svgo -f $(OUTPUT_DIR)/svg --multipass --quiet; \
+		echo "SVG optimization complete"; \
+	else \
+		echo "svgo not found - skipping SVG optimization"; \
+		echo "Install with: npm install -g svgo"; \
+	fi
+
+html: setup extract optimize
 	$(UV) run python -m src.html_gen.generate
 
 clean:
