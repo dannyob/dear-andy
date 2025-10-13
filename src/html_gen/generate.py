@@ -351,7 +351,13 @@ class HTMLGenerator:
         ) != ccw(x1, y1, x2, y2, x4, y4)
 
     def apply_pdf_hyperlinks(self, svg_content, svg_path):
-        """Apply PDF hyperlinks to SVG content."""
+        """Apply PDF hyperlinks to SVG content using simple overlay technique.
+
+        This creates blue strokes in link areas by:
+        1. Keeping original paths visible in black
+        2. Creating masks for link areas
+        3. Duplicating paths in blue masked groups (paint on top in link areas)
+        """
         hyperlinks = self.load_hyperlink_metadata(svg_path)
         if not hyperlinks:
             return svg_content
@@ -359,85 +365,87 @@ class HTMLGenerator:
         soup = BeautifulSoup(svg_content, "xml")
         svg_element = soup.find("svg")
 
-        for link_data in hyperlinks:
+        if not hyperlinks:
+            return str(soup)
+
+        # Get page number for unique IDs
+        page_number = svg_element.get("data-page-number", "1")
+
+        # Create defs element if it doesn't exist
+        defs = soup.find("defs")
+        if not defs:
+            defs = soup.new_tag("defs")
+            svg_element.insert(0, defs)
+
+        # Collect all path elements (these are the strokes we want to recolor)
+        # Exclude paths that are inside defs (they're used for clipping/masking)
+        all_paths = []
+        for path in svg_element.find_all("path"):
+            # Check if this path is inside a defs element
+            is_in_defs = any(parent.name == "defs" for parent in path.parents)
+            if not is_in_defs:
+                all_paths.append(path)
+
+        # Process each hyperlink - create masks for blue strokes inside link areas
+        for idx, link_data in enumerate(hyperlinks):
             uri = link_data["uri"]
             bbox = link_data["bbox"]
 
-            # Convert PDF bbox to SVG coordinates accounting for transform
-            # matrix(1,0,0,-1,0,842)
-            # PDF: y=0 is bottom, SVG: y=0 is top, transform flips and translates by 842
-            pdf_x1, pdf_y1 = bbox["x"], bbox["y"]
-            pdf_x2, pdf_y2 = bbox["x"] + bbox["width"], bbox["y"] + bbox["height"]
+            mask_id_inside = f"linkMaskInside_{page_number}_{idx}"
 
-            # Transform to SVG coordinates
-            svg_x1, svg_x2 = pdf_x1, pdf_x2
-            svg_y1, svg_y2 = 842 - pdf_y2, 842 - pdf_y1  # Flip Y coordinates
+            # Create mask for inside link area (blue strokes ONLY in link area)
+            mask_inside = soup.new_tag("mask")
+            mask_inside["id"] = mask_id_inside
 
-            link_bbox = {"x1": svg_x1, "y1": svg_y1, "x2": svg_x2, "y2": svg_y2}
+            link_rect_inside = soup.new_tag("rect")
+            link_rect_inside["x"] = f"{bbox['x']:.1f}"
+            link_rect_inside["y"] = f"{bbox['y']:.1f}"
+            link_rect_inside["width"] = f"{bbox['width']:.1f}"
+            link_rect_inside["height"] = f"{bbox['height']:.1f}"
+            link_rect_inside["fill"] = "white"
+            mask_inside.append(link_rect_inside)
 
-            # Find all paths that intersect this bounding box
-            paths_to_modify = []
-            all_paths = soup.find_all("path")
+            defs.append(mask_inside)
 
+        # Create blue groups for each link area (blue strokes paint on top of black originals)
+        for idx, link_data in enumerate(hyperlinks):
+            uri = link_data["uri"]
+            bbox = link_data["bbox"]
+            mask_id_inside = f"linkMaskInside_{page_number}_{idx}"
+
+            # Create group for blue strokes inside this link
+            blue_group = soup.new_tag("g")
+            blue_group["mask"] = f"url(#{mask_id_inside})"
+
+            # Clone all paths into blue group
             for path in all_paths:
-                if not path.get("d"):
-                    continue
+                path_clone = soup.new_tag("path")
+                for attr, value in path.attrs.items():
+                    # Skip style attribute to avoid copying display:none
+                    if attr != "style":
+                        path_clone[attr] = value
+                # Make stroke blue
+                path_clone["stroke"] = "blue"
+                path_clone["pointer-events"] = "none"
+                blue_group.append(path_clone)
 
-                if self.path_intersects_rect(path["d"], link_bbox):
-                    paths_to_modify.append(path)
+            svg_element.append(blue_group)
 
-            # Create hyperlink wrapper (even if no paths found)
+            # Create clickable overlay
             link_elem = soup.new_tag("a")
             link_elem["xlink:href"] = uri
             link_elem["target"] = "_blank"
 
-            if paths_to_modify:
-                # Create group for blue styling when paths exist
-                group_elem = soup.new_tag("g")
-                group_elem["stroke"] = "blue"
-                group_elem["fill"] = "none"
-                group_elem["stroke-width"] = "1"
-                group_elem["stroke-linecap"] = "round"
-                group_elem["stroke-linejoin"] = "round"
+            overlay_rect = soup.new_tag("rect")
+            overlay_rect["x"] = f"{bbox['x']:.1f}"
+            overlay_rect["y"] = f"{bbox['y']:.1f}"
+            overlay_rect["width"] = f"{bbox['width']:.1f}"
+            overlay_rect["height"] = f"{bbox['height']:.1f}"
+            overlay_rect["fill"] = "none"
+            overlay_rect["stroke"] = "none"
+            overlay_rect["pointer-events"] = "all"
 
-                # Add clickable rect (using original PDF coordinates - this
-                # positioning worked!)
-                click_rect = soup.new_tag("rect")
-                click_rect["x"] = f"{bbox['x']:.1f}"
-                click_rect["y"] = f"{bbox['y']:.1f}"
-                click_rect["width"] = f"{bbox['width']:.1f}"
-                click_rect["height"] = f"{bbox['height']:.1f}"
-                click_rect["fill"] = "none"
-                click_rect["stroke"] = "none"
-                click_rect["pointer-events"] = "all"
-
-                group_elem.append(click_rect)
-
-                # Move intersecting paths into the blue group and change their stroke
-                for path in paths_to_modify:
-                    # Remove from original location
-                    path.extract()
-                    # Change stroke to blue
-                    path["stroke"] = "blue"
-                    # Add to blue group
-                    group_elem.append(path)
-
-                link_elem.append(group_elem)
-            else:
-                # No paths found, just add clickable area with light background
-                # for visibility
-                click_rect = soup.new_tag("rect")
-                click_rect["x"] = f"{bbox['x']:.1f}"
-                click_rect["y"] = f"{bbox['y']:.1f}"
-                click_rect["width"] = f"{bbox['width']:.1f}"
-                click_rect["height"] = f"{bbox['height']:.1f}"
-                click_rect["fill"] = "rgba(0,0,255,0.1)"  # Light blue background
-                click_rect["stroke"] = "blue"
-                click_rect["stroke-width"] = "1"
-                click_rect["pointer-events"] = "all"
-
-                link_elem.append(click_rect)
-
+            link_elem.append(overlay_rect)
             svg_element.append(link_elem)
 
         return str(soup)
